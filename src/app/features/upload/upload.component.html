@@ -1,0 +1,332 @@
+<div class="upload-page">
+
+  <div class="container">
+
+    <!-- Header -->
+
+    <div class="header">
+
+      <div class="logo">
+        <span class="logo-icon">▶</span>
+        <span>GameClip AI</span>
+      </div>
+
+      <p class="subtitle">
+        Turn your gameplay into YouTube Shorts
+      </p>
+
+    </div>
+
+
+    <!-- Upload Card -->
+
+    <div class="upload-card">
+
+      <h1>Upload your gameplay</h1>
+
+      <p class="description">
+        Upload a gameplay video and we'll automatically find
+        interesting moments and create short clips.
+      </p>
+
+
+      <!-- Drop Zone -->
+
+      <div class="drop-zone" [class.dragging]="isDragging" [class.has-file]="selectedFile"
+        (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+
+        @if (!selectedFile) {
+
+        <div class="upload-content">
+
+          <div class="upload-icon">
+            ↑
+          </div>
+
+          <h2>Drop your video here</h2>
+
+          <p>or</p>
+
+          <label class="choose-button">
+
+            Choose Video
+
+            <input type="file" accept="video/mp4,video/webm,video/quicktime" hidden (change)="onFileSelected($event)" />
+
+          </label>
+
+          <span class="supported">
+            MP4, WebM or MOV • Maximum 500 MB
+          </span>
+
+        </div>
+
+        }
+
+
+        @if (selectedFile) {
+
+        <div class="file-content">
+
+          <div class="video-wrapper">
+
+            <video [src]="videoPreviewUrl" controls preload="metadata"></video>
+
+          </div>
+
+
+          <div class="file-info">
+
+            <div class="file-name">
+              {{ selectedFile.name }}
+            </div>
+
+            <div class="file-size">
+              {{ fileSizeInMB }} MB
+            </div>
+
+          </div>
+
+
+          <button class="remove-button" type="button" (click)="removeFile()">
+            Remove
+          </button>
+
+        </div>
+
+        }
+
+      </div>
+
+
+      <!-- Error -->
+
+      @if (errorMessage) {
+
+      <div class="error-message">
+        ⚠ {{ errorMessage }}
+      </div>
+
+      }
+
+
+      <!-- Upload Button -->
+
+      @if (selectedFile) {
+
+      <button class="upload-button" type="button" [disabled]="isUploading || isGenerating" (click)="uploadVideo()">
+
+        @if (!isUploading && !isGenerating) {
+        <span>Generate Shorts →</span>
+        }
+
+        @if (isUploading) {
+        <span>
+          Uploading... {{ uploadProgress }}%
+        </span>
+        }
+
+        @if (!isUploading && isGenerating) {
+        <span>
+          Analyzing & Generating Shorts...
+        </span>
+        }
+
+      </button>
+
+      }
+
+
+      <!-- Progress -->
+
+      @if (isUploading) {
+
+      <div class="progress-container">
+
+        <div class="progress-bar">
+
+          <div class="progress" [style.width.%]="uploadProgress"></div>
+
+        </div>
+
+        <span>
+          {{ uploadProgress }}%
+        </span>
+
+      </div>
+
+      }
+
+    </div>
+
+
+    @if (isGenerating) {
+
+    <div class="generating-section">
+
+      <div class="generating-spinner">
+        ⟳
+      </div>
+
+      <h2>Creating your Shorts...</h2>
+
+      <p>
+        {{ generationStatus }}
+      </p>
+
+      <div class="generation-progress">
+
+        <div class="generation-progress-bar">
+
+          <div class="generation-progress-fill" [style.width.%]="generationProgress"></div>
+
+        </div>
+
+        <div class="generation-progress-info">
+
+          <span>
+            {{ generationProgress }}%
+          </span>
+
+          <span>
+            Please wait...
+          </span>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    }
+
+    @if (generatedClips.length > 0) {
+
+    <div class="results-section">
+
+      <div class="results-header">
+
+        <h2>Your Shorts 🎬</h2>
+
+        <p>
+          We found
+          {{ generatedClips.length }}
+          highlight moments.
+        </p>
+
+      </div>
+
+
+      <div class="clips-grid">
+
+        @for (
+        clip of generatedClips;
+        track clip.filename;
+        let i = $index
+        ) {
+
+        <div class="clip-card">
+
+          <div class="clip-video-wrapper">
+
+            <video class="clip-video" [src]="clip.url" controls preload="metadata"></video>
+
+          </div>
+
+
+          <div class="clip-info">
+
+            <div class="clip-title">
+
+              <h3>
+                Short {{ i + 1 }}
+              </h3>
+
+              <span class="score">
+                {{
+                (clip.score * 100)
+                | number:'1.0-0'
+                }}%
+              </span>
+
+            </div>
+
+
+            <p class="clip-time">
+
+              Highlight:
+              {{ clip.start }}s →
+              {{ clip.end }}s
+
+            </p>
+
+
+            <button class="download-button" type="button" (click)="downloadShort(clip, i)">
+              Download Short
+            </button>
+
+          </div>
+
+        </div>
+
+        }
+
+      </div>
+
+    </div>
+
+    }
+
+    <!-- How it works -->
+
+    <div class="how-it-works">
+
+      <h2>How it works</h2>
+
+      <div class="steps">
+
+        <div class="step">
+
+          <div class="step-number">1</div>
+
+          <h3>Upload</h3>
+
+          <p>
+            Upload your gameplay video.
+          </p>
+
+        </div>
+
+
+        <div class="step">
+
+          <div class="step-number">2</div>
+
+          <h3>Analyze</h3>
+
+          <p>
+            Our system analyzes the video.
+          </p>
+
+        </div>
+
+
+        <div class="step">
+
+          <div class="step-number">3</div>
+
+          <h3>Generate</h3>
+
+          <p>
+            Get automatically generated Shorts.
+          </p>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
