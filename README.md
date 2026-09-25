@@ -1,11 +1,9 @@
 
 # 🎮 GameClip AI
 
-**GameClip AI** is a web application that automatically analyzes gameplay videos, detects interesting/high-intensity moments, and generates short vertical clips suitable for platforms such as **YouTube Shorts and Instagram Reels**.
+**GameClip AI** is an AI-powered web application that automatically analyzes gameplay videos, identifies potentially interesting/high-intensity moments, ranks the best candidates using AI, and generates vertical clips optimized for platforms such as **YouTube Shorts** and **Instagram Reels**.
 
-The project is built using **Angular, Node.js, Express, FFmpeg and Sharp**.
-
-> **Current version:** Highlight detection is algorithmic. AI/LLM-based semantic video analysis is planned for a future version.
+The application combines **visual activity analysis, audio intensity analysis, scene detection, speech transcription, algorithmic candidate selection, and Qwen3-based semantic ranking** into a single automated pipeline.
 
 ---
 
@@ -13,67 +11,453 @@ The project is built using **Angular, Node.js, Express, FFmpeg and Sharp**.
 
 * 🎥 Upload gameplay videos
 * 📊 Upload progress tracking
-* 🖼️ Extract video frames using FFmpeg
+* 🖼️ Extract gameplay frames using FFmpeg
 * 👀 Detect visual activity using frame differences
-* 🔊 Analyze audio intensity
+* 🔊 Analyze audio intensity using RMS amplitude
 * 🎬 Detect scene changes
 * 🧠 Calculate combined highlight scores
 * 📌 Group nearby highlight events
 * 🚫 Remove overlapping events
 * 🏆 Select top highlight candidates
-* ✂️ Automatically generate short clips
-* 📱 Convert generated clips to **1080 × 1920 (9:16)**
+* 🗣️ Transcribe gameplay audio using **faster-whisper**
+* 🤖 Rank highlight candidates using **Qwen3**
+* ⚡ Send all candidates to Qwen in **one AI request**
+* 🎯 AI ranking based on visual, audio, scene and transcript information
+* ✂️ Automatically generate Shorts from AI-selected candidates
+* 📱 Convert videos to **1080 × 1920 (9:16)**
 * ▶️ Preview generated Shorts directly in the browser
 * ⬇️ Download generated Shorts
+* 🧹 Automatically clean temporary processing files
 
 ---
 
 # 🏗️ Architecture
 
 ```text
-                    ┌──────────────────────┐
-                    │      Angular UI      │
-                    │                      │
-                    │ Upload Gameplay      │
-                    │ Show Progress        │
-                    │ Preview Shorts       │
-                    │ Download Shorts      │
-                    └──────────┬───────────┘
-                               │
-                               │ HTTP
-                               ▼
-                    ┌──────────────────────┐
-                    │    Node.js + Express │
-                    │                      │
-                    │ Upload API           │
-                    │ Analysis API         │
-                    │ Generate Shorts API  │
-                    └──────────┬───────────┘
-                               │
-              ┌────────────────┼────────────────┐
-              │                │                │
-              ▼                ▼                ▼
-           FFmpeg           Sharp          Audio Analysis
-              │                │                │
-              ▼                ▼                ▼
-        Video Processing   Frame Analysis   Audio Scores
-              │                │                │
-              └────────────────┼────────────────┘
-                               ▼
-                     Highlight Detection
-                               │
-                               ▼
-                       Candidate Selection
-                               │
-                               ▼
-                         FFmpeg Encoding
-                               │
-                               ▼
-                         1080 × 1920
-                            9:16
-                               │
-                               ▼
-                         Generated Shorts
+                         ┌──────────────────────┐
+                         │      Angular UI      │
+                         │                      │
+                         │ Upload Gameplay      │
+                         │ Show Progress        │
+                         │ Generate Shorts      │
+                         │ Preview Shorts       │
+                         │ Download Shorts      │
+                         └──────────┬───────────┘
+                                    │
+                                    │ HTTP
+                                    ▼
+                         ┌──────────────────────┐
+                         │   Node.js + Express  │
+                         │                      │
+                         │ Upload API           │
+                         │ Analysis API         │
+                         │ AI Shorts API        │
+                         └──────────┬───────────┘
+                                    │
+                 ┌──────────────────┼──────────────────┐
+                 │                  │                  │
+                 ▼                  ▼                  ▼
+              FFmpeg             Frame              Audio
+                                 Analysis           Analysis
+                 │                  │                  │
+                 │                  ▼                  ▼
+                 │             Visual Scores      Audio Scores
+                 │                  │                  │
+                 └──────────────────┼──────────────────┘
+                                    ▼
+                            Scene Detection
+                                    │
+                                    ▼
+                          Highlight Score Fusion
+                                    │
+                                    ▼
+                          Event Grouping
+                                    │
+                                    ▼
+                         Candidate Selection
+                                    │
+                                    ▼
+                       Candidate Feature Building
+                                    │
+                 ┌──────────────────┴──────────────────┐
+                 │                                     │
+                 ▼                                     ▼
+          faster-whisper                           Qwen3
+          Speech Transcription                  AI Candidate Ranking
+                 │                                     │
+                 └──────────────────┬──────────────────┘
+                                    │
+                                    ▼
+                          Top AI Candidates
+                                    │
+                                    ▼
+                            Node.js Mapping
+                                    │
+                                    ▼
+                               FFmpeg
+                                    │
+                                    ▼
+                         1080 × 1920 Vertical
+                                    │
+                                    ▼
+                           Generated Shorts
+```
+
+---
+
+# 🧠 AI Processing Architecture
+
+The current AI pipeline is designed so that **Node.js remains responsible for video boundaries and FFmpeg processing**, while Qwen3 is responsible for **semantic candidate ranking**.
+
+```text
+Gameplay Video
+      │
+      ├───────────────┐
+      │               │
+      ▼               ▼
+   Frames           Audio
+      │               │
+      ▼               ▼
+Visual Analysis   Audio Analysis
+      │               │
+      └───────┬───────┘
+              │
+              ▼
+        Scene Detection
+              │
+              ▼
+       Highlight Scoring
+              │
+              ▼
+      Candidate Selection
+              │
+              ▼
+    Candidate Feature Builder
+              │
+              ├───────────────┐
+              │               │
+              ▼               ▼
+        faster-whisper      Candidate
+        Transcription       Features
+              │               │
+              └───────┬───────┘
+                      │
+                      ▼
+                 ONE QWEN3
+                   REQUEST
+                      │
+                      ▼
+              AI Candidate Ranking
+                      │
+                      ▼
+                 Top 3 Candidates
+                      │
+                      ▼
+                    FFmpeg
+                      │
+                      ▼
+                Vertical Shorts
+```
+
+---
+
+# 🤖 AI Candidate Ranking
+
+The system does **not** ask Qwen3 to generate arbitrary timestamps.
+
+Instead, Node.js first creates candidate segments with fixed boundaries.
+
+For example:
+
+```json
+{
+  "id": 2,
+  "start": 21,
+  "end": 36,
+  "duration": 15,
+  "algorithmicScore": 0.68
+}
+```
+
+Qwen3 receives all candidate information and ranks the candidates.
+
+The expected AI response is:
+
+```json
+{
+  "results": [
+    {
+      "id": 2,
+      "ai_score": 92,
+      "category": "highlight",
+      "reason": "Strong gameplay activity and audio intensity."
+    },
+    {
+      "id": 0,
+      "ai_score": 84,
+      "category": "action",
+      "reason": "High visual activity and multiple scene changes."
+    },
+    {
+      "id": 1,
+      "ai_score": 78,
+      "category": "action",
+      "reason": "Good sustained visual and audio activity."
+    }
+  ]
+}
+```
+
+### Why candidate IDs are used
+
+Qwen3 does **not** control the final FFmpeg timestamps.
+
+Instead:
+
+```text
+Qwen
+  │
+  ▼
+Candidate ID
+  │
+  ▼
+Node.js finds original candidate
+  │
+  ▼
+Original start/end timestamps
+  │
+  ▼
+FFmpeg
+```
+
+This prevents invalid or hallucinated timestamps from being passed directly to the video-processing pipeline.
+
+---
+
+# 🗣️ Speech Transcription
+
+Gameplay audio is extracted as:
+
+```text
+Mono
+16 kHz
+PCM WAV
+```
+
+The audio is then processed using **faster-whisper**.
+
+The transcription provides contextual information such as:
+
+```text
+"You stay with her till they get here."
+
+"Just save her. I'll get the rest."
+```
+
+This information can help the AI distinguish between ordinary gameplay and moments involving:
+
+* dialogue
+* important events
+* reactions
+* objectives
+* story moments
+* player interactions
+
+---
+
+# 🧠 Qwen3
+
+Qwen3 is used for semantic candidate ranking.
+
+The current architecture uses a locally running Qwen3 model through **Ollama**.
+
+Example configuration:
+
+```text
+Ollama
+   │
+   ▼
+Qwen3
+   │
+   ▼
+Candidate Ranking
+```
+
+The application sends **one request containing all selected candidates**, rather than making a separate LLM request for every candidate.
+
+This reduces unnecessary model calls and allows the model to compare candidates against each other.
+
+---
+
+# 📊 Candidate Features
+
+Each candidate contains multiple signals.
+
+### Candidate Metadata
+
+```text
+Start
+End
+Duration
+Algorithmic Score
+```
+
+### Visual Features
+
+```text
+Average Activity
+Peak Activity
+Peak Timestamp
+Per-second Visual Samples
+```
+
+### Audio Features
+
+```text
+Average Intensity
+Peak Intensity
+Peak Timestamp
+Per-second Audio Samples
+```
+
+### Scene Features
+
+```text
+Scene Count
+Scene Change Timestamps
+```
+
+### Transcript
+
+The faster-whisper transcription provides additional spoken-context information to the AI analysis pipeline.
+
+---
+
+# 📈 Highlight Detection
+
+Before AI ranking, GameClip AI performs algorithmic highlight detection.
+
+The system combines three signals.
+
+## Visual Activity
+
+Frames are extracted approximately once per second.
+
+Consecutive frames are compared to detect visual changes.
+
+```text
+Frame A
+   ↓
+Grayscale + Resize
+   ↓
+Frame B
+   ↓
+Pixel Difference
+   ↓
+Visual Activity Score
+```
+
+High visual activity can indicate:
+
+* combat
+* explosions
+* camera movement
+* rapid gameplay
+* environmental changes
+
+---
+
+## Audio Intensity
+
+The audio track is converted into WAV and analyzed using RMS amplitude.
+
+Higher audio intensity can indicate:
+
+* explosions
+* combat
+* gunfire
+* loud effects
+* character reactions
+* major gameplay moments
+
+---
+
+## Scene Detection
+
+Scene detection identifies significant visual transitions in the gameplay footage.
+
+Scene changes provide another signal that can help identify meaningful gameplay events.
+
+---
+
+# 🧮 Combined Highlight Score
+
+The initial algorithmic score combines:
+
+```text
+Visual Activity     50%
+Audio Intensity     30%
+Scene Changes       20%
+```
+
+Conceptually:
+
+```text
+Highlight Score =
+      Visual × 0.50
+    + Audio × 0.30
+    + Scene × 0.20
+```
+
+These algorithmic scores are used to identify promising candidates before the AI ranking stage.
+
+---
+
+# 🔄 Complete AI Shorts Workflow
+
+```text
+1. Upload gameplay video
+        ↓
+2. Extract frames
+        ↓
+3. Analyze visual activity
+        ↓
+4. Extract audio
+        ↓
+5. Analyze audio intensity
+        ↓
+6. Detect scene changes
+        ↓
+7. Combine highlight signals
+        ↓
+8. Group highlight events
+        ↓
+9. Remove overlapping events
+        ↓
+10. Select top candidates
+        ↓
+11. Build candidate features
+        ↓
+12. Transcribe audio with faster-whisper
+        ↓
+13. Send ALL candidates to Qwen3
+        │
+        │ ONE REQUEST
+        ▼
+14. Qwen3 ranks candidates
+        ↓
+15. Node.js maps AI IDs
+    back to original candidates
+        ↓
+16. Keep original timestamps
+        ↓
+17. Generate top 3 Shorts
+        ↓
+18. Convert to 9:16
+        ↓
+19. Return generated clips
+        ↓
+20. Angular displays Shorts
 ```
 
 ---
@@ -101,6 +485,11 @@ gameclip-ai/
 │       └── package.json
 │
 ├── backend/
+│   ├── ai/
+│   │   ├── app.py
+│   │   ├── requirements.txt
+│   │   └── ...
+│   │
 │   ├── services/
 │   │   ├── videoProcessor.js
 │   │   ├── videoAnalyzer.js
@@ -108,7 +497,8 @@ gameclip-ai/
 │   │   ├── audioAnalyzer.js
 │   │   ├── highlightDetector.js
 │   │   ├── sceneDetector.js
-│   │   └── candidateSelector.js
+│   │   ├── candidateSelector.js
+│   │   └── aiClipSelector.js
 │   │
 │   ├── uploads/
 │   ├── frames/
@@ -128,18 +518,60 @@ gameclip-ai/
 
 Before running the project, install:
 
-* **Node.js** 18+
+* **Node.js 18+**
 * **npm**
 * **Angular CLI**
+* **Python 3.10+**
 * **FFmpeg**
+* **Ollama**
 
-Check your installations:
+Check the installations:
 
 ```bash
 node --version
 npm --version
+python3 --version
 ng version
 ffmpeg -version
+ollama --version
+```
+
+---
+
+# 🤖 AI Dependencies
+
+The AI pipeline requires:
+
+### faster-whisper
+
+Used for speech transcription.
+
+Install through the Python requirements:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Ollama
+
+Ollama runs the local Qwen3 model.
+
+Install Ollama and then pull the model:
+
+```bash
+ollama pull qwen3:4b
+```
+
+Verify:
+
+```bash
+ollama list
+```
+
+The model should appear as:
+
+```text
+qwen3:4b
 ```
 
 ---
@@ -178,7 +610,7 @@ Start Angular:
 ng serve
 ```
 
-The frontend will normally be available at:
+Frontend:
 
 ```text
 http://localhost:4200
@@ -186,11 +618,11 @@ http://localhost:4200
 
 ---
 
-# ⚙️ Backend Setup
+# ⚙️ Node.js Backend Setup
 
 Open another terminal.
 
-Navigate to the backend:
+Navigate to:
 
 ```bash
 cd backend
@@ -214,10 +646,94 @@ Or:
 npm start
 ```
 
-The backend will run on:
+Backend:
 
 ```text
 http://localhost:3000
+```
+
+---
+
+# 🐍 AI Service Setup
+
+Open another terminal.
+
+Navigate to:
+
+```bash
+cd backend/ai
+```
+
+Create a virtual environment:
+
+```bash
+python3 -m venv venv
+```
+
+Activate it on macOS/Linux:
+
+```bash
+source venv/bin/activate
+```
+
+On Windows:
+
+```bash
+venv\Scripts\activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Start FastAPI:
+
+```bash
+uvicorn app:app --reload --port 8000
+```
+
+AI service:
+
+```text
+http://localhost:8000
+```
+
+Health check:
+
+```bash
+curl http://localhost:8000/health
+```
+
+---
+
+# 🦙 Ollama Setup
+
+Make sure Ollama is running.
+
+Pull Qwen3:
+
+```bash
+ollama pull qwen3:4b
+```
+
+Check installed models:
+
+```bash
+ollama list
+```
+
+The expected model is:
+
+```text
+qwen3:4b
+```
+
+The application communicates with Ollama through:
+
+```text
+http://127.0.0.1:11434
 ```
 
 ---
@@ -228,7 +744,7 @@ FFmpeg is required for video processing.
 
 ## macOS
 
-If you use Homebrew:
+Using Homebrew:
 
 ```bash
 brew install ffmpeg
@@ -295,7 +811,7 @@ Form field:
 video
 ```
 
-Example using cURL:
+Example:
 
 ```bash
 curl -X POST \
@@ -325,7 +841,7 @@ POST /api/videos/gameplay-123.mp4/detect-scenes
 POST /api/videos/:filename/analyze-highlights
 ```
 
-This pipeline performs:
+Pipeline:
 
 ```text
 Video
@@ -347,101 +863,97 @@ Overlap Removal
 
 ---
 
-## Generate Shorts
+# 🤖 Generate AI Shorts
 
 ```http
 POST /api/videos/:filename/generate-ai-shorts
 ```
 
-> The endpoint currently uses algorithmic highlight detection. Despite the endpoint name, the current implementation does not use an AI/LLM model yet.
+This is the primary AI pipeline.
 
-The pipeline:
+The endpoint performs:
 
 ```text
-Gameplay Video
-      ↓
-Frame Extraction
-      ↓
-Visual Activity
-      ↓
-Audio Intensity
-      ↓
+Video
+ ↓
+Frames
+ ↓
+Visual Analysis
+ ↓
+Audio Extraction
+ ↓
+Audio Analysis
+ ↓
 Scene Detection
-      ↓
-Combined Highlight Score
-      ↓
+ ↓
+Algorithmic Highlight Scoring
+ ↓
 Candidate Selection
-      ↓
+ ↓
+Candidate Feature Building
+ ↓
+faster-whisper
+ ↓
+ONE Qwen3 Request
+ ↓
+AI Candidate Ranking
+ ↓
+Top 3 Candidates
+ ↓
 FFmpeg
-      ↓
-Generated Shorts
+ ↓
+1080 × 1920 Shorts
 ```
 
 ---
 
-# 🧠 Highlight Detection
+# 🎯 Why Qwen3 Only Returns Candidate IDs
 
-The current system does not use a machine-learning model.
+The system deliberately separates **AI ranking** from **video processing**.
 
-Instead, it combines three signals.
+Qwen3 returns:
 
-### Visual Activity
+```json
+{
+  "id": 2,
+  "ai_score": 92,
+  "category": "highlight",
+  "reason": "Strong gameplay activity and audio intensity."
+}
+```
 
-Frames are extracted approximately once per second.
+It does **not** generate:
 
-Consecutive frames are compared using image differences.
+```json
+{
+  "recommended_start": 21,
+  "recommended_end": 36
+}
+```
+
+Node.js already knows the candidate boundaries.
+
+For example:
 
 ```text
-Frame A
-   ↓
-Grayscale + Resize
-   ↓
-Frame B
-   ↓
-Pixel Difference
-   ↓
-Visual Score
+Candidate 2
+
+Start: 21
+End:   36
 ```
 
----
-
-### Audio Intensity
-
-The audio track is converted to WAV and analyzed using RMS amplitude.
-
-Higher audio intensity can indicate events such as:
-
-* explosions
-* combat
-* loud effects
-* major gameplay moments
-
----
-
-### Scene Detection
-
-FFmpeg's scene detection filter identifies significant visual transitions.
-
----
-
-### Combined Score
-
-The current highlight score is calculated using:
+If Qwen selects candidate `2`, Node.js retrieves:
 
 ```text
-Visual Activity     50%
-Audio Intensity     30%
-Scene Changes       20%
+Candidate 2
+     ↓
+start = 21
+end   = 36
 ```
 
-Conceptually:
+and passes those original boundaries to FFmpeg.
 
-```text
-Highlight Score =
-    Visual × 0.50
-  + Audio × 0.30
-  + Scene × 0.20
-```
+This makes the video-processing pipeline deterministic.
 
 ---
 
@@ -457,9 +969,9 @@ Audio Codec: AAC
 Pixel Format: yuv420p
 ```
 
-The conversion uses FFmpeg scaling and cropping to maintain the 9:16 aspect ratio.
+The conversion uses FFmpeg scaling and cropping to produce vertical video.
 
-> Note: The current implementation uses a fixed center crop. Subject-aware/dynamic reframing is planned for a future version.
+> **Current limitation:** the implementation uses a fixed center crop. Subject-aware/dynamic reframing is planned for a future version.
 
 ---
 
@@ -477,44 +989,50 @@ backend/
 
 ### `uploads/`
 
-Stores uploaded gameplay videos.
+Original uploaded gameplay videos.
 
 ### `frames/`
 
-Stores extracted JPG frames used for visual analysis.
+Extracted frames used for visual analysis.
 
 ### `audio/`
 
-Stores extracted WAV audio used for audio analysis.
+Extracted WAV files used for audio analysis and transcription.
 
 ### `clips/`
 
-Stores generated Shorts.
+Generated Shorts.
 
 ---
 
 # 🧹 Cleanup
 
-The `frames/` and `audio/` directories contain temporary processing files.
+Temporary frames and audio files are automatically cleaned after AI Shorts generation.
 
-For development, they can be manually cleared:
+They can also be manually removed during development:
 
 ```bash
 rm -rf frames/*
 rm -rf audio/*
 ```
 
-Generated clips can be removed with:
+Generated clips:
 
 ```bash
 rm -rf clips/*
 ```
 
-Be careful when deleting `uploads/` because it contains the original uploaded videos.
+Be careful when deleting:
+
+```text
+uploads/
+```
+
+because it contains the original uploaded videos.
 
 ---
 
-# ⚠️ Important: Do Not Commit Generated Videos
+# ⚠️ Do Not Commit Generated Videos
 
 Do **not** commit:
 
@@ -525,9 +1043,7 @@ audio/
 clips/
 ```
 
-Add them to `.gitignore`.
-
-Example:
+Add them to `.gitignore`:
 
 ```gitignore
 # Dependencies
@@ -554,7 +1070,7 @@ frontend/gameclip-ai/.angular/
 frontend/gameclip-ai/dist/
 ```
 
-If the directories need to exist after cloning, add `.gitkeep` files:
+If the directories need to exist after cloning, add:
 
 ```text
 backend/uploads/.gitkeep
@@ -563,29 +1079,13 @@ backend/audio/.gitkeep
 backend/clips/.gitkeep
 ```
 
-Then use:
-
-```gitignore
-backend/uploads/*
-!backend/uploads/.gitkeep
-
-backend/frames/*
-!backend/frames/.gitkeep
-
-backend/audio/*
-!backend/audio/.gitkeep
-
-backend/clips/*
-!backend/clips/.gitkeep
-```
-
 ---
 
 # 🚀 Running the Complete Application
 
-You need two terminals.
+The current architecture uses **three services**.
 
-### Terminal 1 — Backend
+## Terminal 1 — Node.js Backend
 
 ```bash
 cd backend
@@ -599,7 +1099,9 @@ Backend:
 http://localhost:3000
 ```
 
-### Terminal 2 — Frontend
+---
+
+## Terminal 2 — Angular Frontend
 
 ```bash
 cd frontend/gameclip-ai
@@ -613,67 +1115,165 @@ Frontend:
 http://localhost:4200
 ```
 
-Then open:
+---
+
+## Terminal 3 — AI Service
+
+```bash
+cd backend/ai
+source venv/bin/activate
+uvicorn app:app --reload --port 8000
+```
+
+AI service:
 
 ```text
-http://localhost:4200
+http://localhost:8000
 ```
 
 ---
 
-# 🔄 Complete Workflow
+## Ollama
+
+Make sure Ollama is running and Qwen3 is installed:
+
+```bash
+ollama pull qwen3:4b
+```
+
+---
+
+# 🔄 Complete Application Workflow
 
 ```text
-1. Open GameClip AI
-        ↓
-2. Upload gameplay video
-        ↓
-3. Click "Generate Shorts"
-        ↓
-4. Video uploaded to Node.js
-        ↓
-5. Frames extracted
-        ↓
-6. Audio analyzed
-        ↓
-7. Scene changes detected
-        ↓
-8. Highlight scores calculated
-        ↓
-9. Highlight events grouped
-        ↓
-10. Top candidates selected
-        ↓
-11. FFmpeg generates vertical Shorts
-        ↓
-12. Shorts displayed in Angular
-        ↓
-13. User previews/downloads Shorts
+┌───────────────────────────────┐
+│        Angular Frontend       │
+└───────────────┬───────────────┘
+                │
+                ▼
+        Upload Gameplay
+                │
+                ▼
+┌───────────────────────────────┐
+│       Node.js + Express       │
+└───────────────┬───────────────┘
+                │
+                ▼
+          Extract Frames
+                │
+                ▼
+        Visual Analysis
+                │
+                ▼
+         Extract Audio
+                │
+                ▼
+         Audio Analysis
+                │
+                ▼
+        Scene Detection
+                │
+                ▼
+       Combine Scores
+                │
+                ▼
+      Group Highlight Events
+                │
+                ▼
+      Remove Overlap
+                │
+                ▼
+       Select Candidates
+                │
+                ▼
+       Build Features
+                │
+          ┌─────┴─────┐
+          │           │
+          ▼           ▼
+    faster-whisper   Candidate
+    Transcription    Features
+          │           │
+          └─────┬─────┘
+                │
+                ▼
+           Qwen3 / Ollama
+                │
+          ONE REQUEST
+                │
+                ▼
+        Rank Candidates
+                │
+                ▼
+           Top 3 IDs
+                │
+                ▼
+       Map IDs → Candidates
+                │
+                ▼
+       Original timestamps
+                │
+                ▼
+             FFmpeg
+                │
+                ▼
+          1080 × 1920
+                │
+                ▼
+         Generated Shorts
+                │
+                ▼
+        Angular Preview
+                │
+                ▼
+             Download
 ```
 
 ---
 
 # 🧪 Development
 
-Backend:
+### Backend
 
 ```bash
 cd backend
 npm run dev
 ```
 
-Frontend:
+### Frontend
 
 ```bash
 cd frontend/gameclip-ai
 ng serve
 ```
 
+### AI Service
+
+```bash
+cd backend/ai
+source venv/bin/activate
+uvicorn app:app --reload --port 8000
+```
+
+### Ollama
+
+```bash
+ollama list
+```
+
+Make sure:
+
+```text
+qwen3:4b
+```
+
+is available.
+
 ---
 
 # 🚧 Roadmap
 
-### Current
+## Completed
 
 * [X] Video upload
 * [X] Upload progress
@@ -682,25 +1282,36 @@ ng serve
 * [X] Visual activity detection
 * [X] Audio intensity detection
 * [X] Scene detection
-* [X] Highlight scoring
+* [X] Algorithmic highlight scoring
+* [X] Highlight event grouping
+* [X] Overlap removal
 * [X] Candidate selection
+* [X] Candidate feature extraction
+* [X] faster-whisper integration
+* [X] Local Qwen3 integration
+* [X] One-request AI candidate ranking
+* [X] AI score/category/reason generation
+* [X] AI candidate ID mapping
 * [X] Automatic Short generation
 * [X] 9:16 video conversion
 * [X] Short preview
 * [X] Short download
+* [X] Temporary file cleanup
 
-### Planned
+## Planned
 
-* [ ] Real AI/LLM-based gameplay understanding
-* [ ] Semantic event detection
-* [ ] AI-powered highlight ranking
+* [ ] True frame-level vision model
+* [ ] Semantic gameplay event detection
+* [ ] More advanced AI highlight ranking
 * [ ] Dynamic subject-aware cropping
 * [ ] Automatic captions
 * [ ] AI-generated titles
 * [ ] AI-generated descriptions
 * [ ] AI-generated hashtags
+* [ ] Improved highlight timestamps
 * [ ] Results dashboard
 * [ ] Background processing/job queue
+* [ ] Redis/BullMQ integration
 * [ ] Cloud storage
 * [ ] User accounts
 * [ ] YouTube upload integration
@@ -708,31 +1319,73 @@ ng serve
 
 ---
 
+# 🔮 Future AI Architecture
+
+The current architecture can later be extended from:
+
+```text
+Frames
+   +
+Audio
+   +
+Scenes
+   +
+Transcript
+   ↓
+Qwen3
+```
+
+to:
+
+```text
+Frames
+   +
+Audio
+   +
+Scenes
+   +
+Transcript
+   +
+Vision Model
+   ↓
+Multimodal AI Analysis
+   ↓
+Highlight Detection
+   ↓
+Clip Ranking
+   ↓
+Automatic Editing
+```
+
+This would allow GameClip AI to understand not only **how much visual/audio activity occurs**, but also **what is actually happening in the gameplay**.
+
+---
+
 # 🤝 Contributing
 
 Contributions are welcome.
 
-1. Fork the repository
-2. Create a feature branch
+1. Fork the repository.
+2. Create a feature branch:
 
 ```bash
 git checkout -b feature/your-feature
 ```
 
-3. Commit your changes
+3. Commit your changes:
 
 ```bash
 git add .
 git commit -m "Add your feature"
 ```
 
-4. Push the branch
+4. Push the branch:
 
 ```bash
 git push origin feature/your-feature
 ```
 
-5. Open a Pull Request
+5. Open a Pull Request.
 
 ---
 
@@ -757,6 +1410,11 @@ Built with:
 * Angular
 * Node.js
 * Express
+* Python
+* FastAPI
+* faster-whisper
+* Qwen3
+* Ollama
 * FFmpeg
 * Sharp
 
