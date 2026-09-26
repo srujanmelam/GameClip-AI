@@ -15,6 +15,11 @@ if (!fs.existsSync(framesDirectory)) {
   });
 }
 
+
+// ============================================================
+// EXISTING FRAME EXTRACTION
+// ============================================================
+
 function extractFrames(
   inputPath,
   videoId,
@@ -22,10 +27,11 @@ function extractFrames(
 ) {
   return new Promise((resolve, reject) => {
 
-    const outputDirectory = path.join(
-      framesDirectory,
-      videoId
-    );
+    const outputDirectory =
+      path.join(
+        framesDirectory,
+        videoId
+      );
 
     if (!fs.existsSync(outputDirectory)) {
       fs.mkdirSync(outputDirectory, {
@@ -39,8 +45,8 @@ function extractFrames(
 
     ffmpeg(inputPath)
       .outputOptions([
-        `-vf fps=1/${interval}`,
-        '-q:v 2'
+        `-vf fps=1/${interval},scale=640:-1`,
+        '-q:v 5'
       ])
       .output(
         path.join(
@@ -48,7 +54,7 @@ function extractFrames(
           'frame-%05d.jpg'
         )
       )
-      .on('start', (command) => {
+      .on('start', command => {
 
         console.log(
           'Frame extraction started:'
@@ -56,11 +62,12 @@ function extractFrames(
 
         console.log(command);
       })
-      .on('progress', (progress) => {
+      .on('progress', progress => {
 
         console.log(
-          `Frame extraction: ${
-            Math.round(progress.percent || 0)
+          `Frame extraction: ${Math.round(
+            progress.percent || 0
+          )
           }%`
         );
       })
@@ -71,23 +78,25 @@ function extractFrames(
         );
 
         const files = fs
-          .readdirSync(outputDirectory)
+          .readdirSync(
+            outputDirectory
+          )
           .filter(file =>
             file.endsWith('.jpg')
           )
           .sort();
 
-        const framePaths = files.map(
-          file =>
+        const framePaths =
+          files.map(file =>
             path.join(
               outputDirectory,
               file
             )
-        );
+          );
 
         resolve(framePaths);
       })
-      .on('error', (error) => {
+      .on('error', error => {
 
         console.error(
           'Frame extraction error:',
@@ -100,47 +109,102 @@ function extractFrames(
   });
 }
 
-async function calculateFrameDifference(
-    frame1,
-    frame2
-  ) {
-  
-    const image1 = await sharp(frame1)
-      .resize(64, 36)
-      .grayscale()
-      .raw()
-      .toBuffer();
-  
-    const image2 = await sharp(frame2)
-      .resize(64, 36)
-      .grayscale()
-      .raw()
-      .toBuffer();
-  
-    let totalDifference = 0;
-  
-    for (
-      let i = 0;
-      i < image1.length;
-      i++
-    ) {
-  
-      totalDifference += Math.abs(
-        image1[i] - image2[i]
-      );
-    }
-  
-    const maxDifference =
-      image1.length * 255;
-  
-    const score =
-      totalDifference /
-      maxDifference;
-  
-    return score;
+
+// ============================================================
+// NEW: BUILD TIMESTAMPED AI FRAMES
+// ============================================================
+
+function buildTimestampedFrames(
+  framePaths,
+  interval = 1
+) {
+
+  if (!Array.isArray(framePaths)) {
+    return [];
   }
 
+  return framePaths.map(
+    (framePath, index) => {
+
+      return {
+
+        path:
+          framePath,
+
+        timestamp:
+          Number(
+            (
+              index *
+              interval
+            ).toFixed(3)
+          ),
+
+        index
+      };
+
+    }
+  );
+}
+
+
+// ============================================================
+// EXISTING FRAME DIFFERENCE
+// ============================================================
+
+async function calculateFrameDifference(
+  frame1,
+  frame2
+) {
+
+  const image1 =
+    await sharp(frame1)
+      .resize(64, 36)
+      .grayscale()
+      .raw()
+      .toBuffer();
+
+  const image2 =
+    await sharp(frame2)
+      .resize(64, 36)
+      .grayscale()
+      .raw()
+      .toBuffer();
+
+  let totalDifference = 0;
+
+  for (
+    let i = 0;
+    i < image1.length;
+    i++
+  ) {
+
+    totalDifference +=
+      Math.abs(
+        image1[i] -
+        image2[i]
+      );
+  }
+
+  const maxDifference =
+    image1.length * 255;
+
+  return (
+    totalDifference /
+    maxDifference
+  );
+}
+
+
+// ============================================================
+// EXPORTS
+// ============================================================
+
 module.exports = {
+
   extractFrames,
+
+  buildTimestampedFrames,
+
   calculateFrameDifference
+
 };
